@@ -8,9 +8,9 @@ from joblib import Parallel, delayed
 import numpy as np
 import argparse
 import sys
-from myopic_mces.graph import construct_graph
-from myopic_mces.MCES_ILP import MCES_ILP
-from myopic_mces.filter_MCES import apply_filter
+from src.myopic_mces.graph import construct_graph
+from src.myopic_mces.MCES_ILP import MCES_ILP
+from src.myopic_mces.filter_MCES import apply_filter
 
 def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={}, no_ilp_threshold=False, always_stronger_bound=True, catch_errors=False):
     """
