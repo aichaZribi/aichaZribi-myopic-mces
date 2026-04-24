@@ -12,7 +12,7 @@ from src.myopic_mces.graph import construct_graph
 from src.myopic_mces.MCES_ILP import MCES_ILP
 from src.myopic_mces.filter_MCES import apply_filter
 
-def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={}, no_ilp_threshold=False, always_stronger_bound=True, catch_errors=False):
+def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={}, no_ilp_threshold=False, always_stronger_bound=False, catch_errors=False):
     """
     Calculates the distance between two molecules
 
@@ -53,6 +53,7 @@ def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={
     """
     start = time.time()
     # construct graph for both smiles.
+    ilp_solver = 0
     G1 = construct_graph(smiles1)
     G2 = construct_graph(smiles2)
     if threshold != -1:         # with `-1` always compute exact distance
@@ -72,6 +73,7 @@ def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={
     try:
         distance, compute_mode = MCES_ILP(G1, G2, threshold, solver, solver_options=solver_options,
                                           no_ilp_threshold=no_ilp_threshold)
+        ilp_solver = 1
     except Exception as e:
         print('ERROR:', smiles1, smiles2, 'exact', e, file=sys.stderr)
         if (catch_errors):
@@ -79,7 +81,7 @@ def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={
             compute_mode = 1
         else:
             raise e
-    return i, distance, time.time() - start, compute_mode
+    return i, distance, time.time() - start, compute_mode, ilp_solver
 
 def hdf5_input(file_path):
     import h5py
