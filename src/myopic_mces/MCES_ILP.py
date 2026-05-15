@@ -6,6 +6,7 @@ Created on Mon Oct  5 17:17:41 2020
 """
 import pulp
 import networkx as nx
+from pulp import LpStatus
 
 def MCES_ILP(G1, G2, threshold, solver='default', solver_options={}, no_ilp_threshold=False):
     """
@@ -149,14 +150,31 @@ def MCES_ILP(G1, G2, threshold, solver='default', solver_options={}, no_ilp_thre
     if threshold!=-1 and not no_ilp_threshold:
         ILP +=pulp.lpSum([ w[i]*c[i] for i in edgepairs])<=threshold
 
+    ILP.writeMPS("debug_mces.mps")
+    ILP.writeLP("debug_mces.lp")
+
     #solve the ILP
-    if solver=="default":
-        sol=pulp.getSolver(solver="PULP_CBC_CMD", **solver_options)
-        ILP.solve(sol)
+    if solver == "default":
+        sol = pulp.getSolver(solver="PULP_CBC_CMD", **solver_options)
+    elif solver == "HiGHS_CMD":
+        sol = pulp.HiGHS(
+            msg=True,
+            timeLimit=60
+        )
     else:
-        sol=pulp.getSolver(solver, **solver_options)
-        ILP.solve(sol)
-    if ILP.status==1:
-        return float(ILP.objective.value()),1
+        sol = pulp.getSolver(solver, **solver_options)
+
+    solve_status = ILP.solve(sol)
+    status_code = ILP.status
+    status_name = LpStatus[ILP.status]
+    objective_value = ILP.objective.value()
+
+    print("solve() returned:", solve_status)
+    print("ILP.status:", status_code)
+    print("Status name:", status_name)
+    print("Objective value:", objective_value)
+
+    if ILP.status == 1:
+        return float(objective_value), 1
     else:
-        return threshold,2
+        return threshold, 2
