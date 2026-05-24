@@ -1,12 +1,15 @@
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import Descriptors
+from pathlib import Path
 
 # =========================
 # PATHS
 # =========================
-INPUT_PATH = r"C:\Users\HP\Desktop\thesis\script\example\example_compound_data.csv"
-OUTPUT_PATH = r"C:\Users\HP\Desktop\thesis\script\example\filtered_pairs.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+INPUT_PATH = BASE_DIR / "example" / "example_compound_data.csv"
+OUTPUT_PATH = BASE_DIR / "example" /"filtered_pairs.csv"
 
 # Columns (based on your example)
 SMILES1_COL = 1

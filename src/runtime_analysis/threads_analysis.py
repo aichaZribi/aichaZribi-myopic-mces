@@ -3,12 +3,15 @@ import matplotlib.pyplot as plt
 import glob
 import os
 import re
+from pathlib import Path
+
+
 
 # ---------------------------------------------------
 # Load files
 # ---------------------------------------------------
-
-files = glob.glob(r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_800_1000_Highs_thread_*.csv")
+BASE_DIR = Path(__file__).resolve().parents[2]
+files = glob.glob(BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_800_1000_Highs_thread_*.csv")
 
 
 dfs = []

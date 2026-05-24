@@ -1,16 +1,18 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 # -----------------------------
 # Load data
 # -----------------------------
+BASE_DIR = Path(__file__).resolve().parents[2]
 cbc = pd.read_csv(
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_800_1000_PULP_CBC.csv"
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_800_1000_PULP_CBC.csv"
 )
 
 highs = pd.read_csv(
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_800_1000_Highs.csv"
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_800_1000_Highs.csv"
 )
 
 # -----------------------------

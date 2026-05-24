@@ -3,6 +3,7 @@
 import csv
 import time
 from multiprocessing import Process, Queue, freeze_support
+from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import Descriptors
@@ -12,11 +13,13 @@ from myopic_mces import MCES
 # =========================
 # SETTINGS
 # =========================
-input_csv = r"C:\Users\HP\Desktop\thesis\script\example\example_compound_data.csv"
-output_csv = r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_300_500_CPLEX_PY_thread_1.csv"
 
-target_mass_min = 300
-target_mass_max = 500
+BASE_DIR = Path(__file__).resolve().parents[2]
+input_csv = BASE_DIR / "example" / "example_compound_data.csv"
+output_csv = BASE_DIR /"example"/"filter_mass_diff_and_size"/"filtered_pairs_800_1000_CPLEX_PY_thread_1.csv"
+
+target_mass_min = 800
+target_mass_max = 1000
 tolerance = 1.5
 TIME_LIMIT = 60
 

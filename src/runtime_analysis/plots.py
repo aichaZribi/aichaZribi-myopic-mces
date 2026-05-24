@@ -1,15 +1,17 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 # =========================
 # PATHS
 # =========================
+BASE_DIR = Path(__file__).resolve().parents[2]
 paths = [
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_0_200.csv",
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_200_300.csv",
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_300_500.csv",
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_500_800.csv",
-    r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_800_1000.csv"
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_0_200.csv",
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_200_300.csv",
+    BASE_DIR / "example" / "filter_mass_diff_and_size" / "filtered_pairs_300_500.csv",
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_500_800.csv",
+    BASE_DIR / "example" / "filter_mass_diff_and_size"/"filtered_pairs_800_1000.csv"
 ]
 
 # =========================

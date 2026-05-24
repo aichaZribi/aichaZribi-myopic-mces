@@ -1,9 +1,11 @@
 import pandas as pd
 from rdkit import Chem
+from pathlib import Path
 
-INPUT_FILE = r"C:\Users\HP\Desktop\thesis\script\example\filtered_pairs.csv"
-REPORT_FILE = r"C:\Users\HP\Desktop\thesis\script\example\filtered_pairs_inspection_report.csv"
-CLEAN_OUTPUT_FILE = r"C:\Users\HP\Desktop\thesis\script\example\filtered_pairs_clean.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+INPUT_FILE = BASE_DIR / "example" / "filtered_pairs.csv"
+REPORT_FILE = BASE_DIR / "example" / "filtered_pairs_inspection_report.csv"
+CLEAN_OUTPUT_FILE = BASE_DIR / "example" / "filtered_pairs_clean.csv"
 
 # Read file
 df = pd.read_csv(INPUT_FILE)

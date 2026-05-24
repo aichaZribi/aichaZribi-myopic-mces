@@ -1,8 +1,11 @@
 import pandas as pd
 import random
+from pathlib import Path
 
-INPUT_FILE = r"C:\Users\HP\Desktop\thesis\script\example\compound_data.csv"
-OUTPUT_FILE = r"C:\Users\HP\Desktop\thesis\script\example\example_compound_data.csv"
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+INPUT_FILE = BASE_DIR / "example" / "compound_data.csv"
+OUTPUT_FILE = BASE_DIR / "example" / "example_compound_data.csv"
 
 df = pd.read_csv(INPUT_FILE)
 
