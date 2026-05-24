@@ -13,10 +13,10 @@ from myopic_mces import MCES
 # SETTINGS
 # =========================
 input_csv = r"C:\Users\HP\Desktop\thesis\script\example\example_compound_data.csv"
-output_csv = r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_800_1000_Highs_2.csv"
+output_csv = r"C:\Users\HP\Desktop\thesis\script\example\filter_mass_diff_and_size\filtered_pairs_300_500_CPLEX_PY_thread_1.csv"
 
-target_mass_min = 800
-target_mass_max = 1000
+target_mass_min = 300
+target_mass_max = 500
 tolerance = 1.5
 TIME_LIMIT = 60
 
@@ -36,7 +36,7 @@ def run_mces(smiles1, smiles2, queue):
     Run MCES in child process and send result back via queue.
     """
     try:
-        result = MCES(smiles1, smiles2, solver="HiGHS_CMD")
+        result = MCES(smiles1, smiles2, solver="CPLEX_PY")
         queue.put(("ok", result))
     except Exception as e:
         queue.put(("error", str(e)))

@@ -159,7 +159,14 @@ def MCES_ILP(G1, G2, threshold, solver='default', solver_options={}, no_ilp_thre
     elif solver == "HiGHS_CMD":
         sol = pulp.HiGHS(
             msg=True,
-            timeLimit=60
+            timeLimit=60,
+            thread = 24
+        )
+    elif solver == "CPLEX_PY":
+        sol = pulp.CPLEX_PY(
+            msg=True,
+            timeLimit=60,
+            threads=1
         )
     else:
         sol = pulp.getSolver(solver, **solver_options)
