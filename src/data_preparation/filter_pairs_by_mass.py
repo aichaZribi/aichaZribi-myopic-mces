@@ -18,11 +18,17 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 input_csv = BASE_DIR / "example" / "example_compound_data.csv"
 output_csv = BASE_DIR /"example"/"filter_mass_diff_and_size"/"filtered_pairs_800_1000_CPLEX_PY_thread_1.csv"
 
-target_mass_min = 800
-target_mass_max = 1000
+
 tolerance = 1.5
 TIME_LIMIT = 60
 
+mass_ranges = [
+    (0, 200),
+    (200, 300),
+    (300, 500),
+    (500, 800),
+    (800, 1000),
+]
 
 # =========================
 # HELPERS
@@ -34,12 +40,12 @@ def get_mass(smiles):
     return Descriptors.MolWt(mol)
 
 
-def run_mces(smiles1, smiles2, queue):
+def run_mces(smiles1, smiles2, solver_name, threads, queue):
     """
     Run MCES in child process and send result back via queue.
     """
     try:
-        result = MCES(smiles1, smiles2, solver="CPLEX_PY")
+        result = MCES(smiles1, smiles2, solver=solver_name, solver_options={"threads": threads})
         queue.put(("ok", result))
     except Exception as e:
         queue.put(("error", str(e)))
@@ -84,7 +90,7 @@ def parse_mces_result(result):
 # =========================
 # MAIN
 # =========================
-def main():
+def main(solver_name, threads, mass_min, mass_max, output_csv):
     results = []
 
     with open(input_csv, "r", encoding="utf-8") as f:
@@ -111,14 +117,14 @@ def main():
 
             # Filter by mass range and mass difference
             if not (
-                target_mass_min <= mass1 <= target_mass_max
-                and target_mass_min <= mass2 <= target_mass_max
+                mass_min <= mass1 <= mass_max
+                and mass_min <= mass2 <= mass_max
                 and abs(mass1 - mass2) <= tolerance
             ):
                 continue
 
             queue = Queue()
-            process = Process(target=run_mces, args=(smiles1, smiles2, queue))
+            process = Process(target=run_mces, args=(smiles1, smiles2, solver_name,threads, queue))
 
             skipped = 0
             distance = None
@@ -217,4 +223,31 @@ def main():
 
 if __name__ == "__main__":
     freeze_support()
-    main()
+    solvers = ["default","CPLEX_PY", "HiGHS_CMD"]
+    threads_list = [1, 4, 8, 24]
+
+    for mass_min, mass_max in mass_ranges:
+
+        for solver_name in solvers:
+
+            for threads in threads_list:
+                output_csv = (
+                        BASE_DIR
+                        / "example"
+                        / "filter_mass_diff_and_size"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}.csv"
+                )
+
+                print(
+                    f"\nRunning range={mass_min}-{mass_max}, "
+                    f"solver={solver_name}, "
+                    f"threads={threads}"
+                )
+
+                main(
+                    solver_name,
+                    threads,
+                    mass_min,
+                    mass_max,
+                    output_csv
+                )
