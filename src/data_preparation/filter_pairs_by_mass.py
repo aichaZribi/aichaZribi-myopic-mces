@@ -45,7 +45,7 @@ def run_mces(smiles1, smiles2, solver_name, threads, queue):
     Run MCES in child process and send result back via queue.
     """
     try:
-        result = MCES(smiles1, smiles2, solver=solver_name, solver_options={"threads": threads})
+        result = MCES(smiles1, smiles2,threshold_mode="dynamic", solver=solver_name, solver_options={"threads": threads})
         queue.put(("ok", result))
     except Exception as e:
         queue.put(("error", str(e)))
@@ -64,9 +64,21 @@ def parse_mces_result(result):
     compute_mode = None
     ilp_solver = None
     solver_called = 0
+    result_type = "unknown"
+    is_exact = 0
+    is_lower_bound = 0
 
     if result is None:
-        return distance, runtime_inside_mces, compute_mode, solver_called, ilp_solver
+        return (
+            distance,
+            runtime_inside_mces,
+            compute_mode,
+            solver_called,
+            ilp_solver,
+            result_type,
+            is_exact,
+            is_lower_bound,
+        )
 
     if len(result) > 1:
         distance = result[1]
@@ -80,11 +92,26 @@ def parse_mces_result(result):
     if len(result) > 4:
         ilp_solver = result[4]
 
-    # Infer whether ILP solver was used
     if ilp_solver not in [None, "", 0, "0", "None"]:
         solver_called = 1
 
-    return distance, runtime_inside_mces, compute_mode, solver_called, ilp_solver
+    if compute_mode == 1:
+        result_type = "exact"
+        is_exact = 1
+    elif compute_mode == 2:
+        result_type = "lower_bound"
+        is_lower_bound = 1
+
+    return (
+        distance,
+        runtime_inside_mces,
+        compute_mode,
+        solver_called,
+        ilp_solver,
+        result_type,
+        is_exact,
+        is_lower_bound,
+    )
 
 
 # =========================
@@ -135,6 +162,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             runtime_inside_mces = None
             raw_result = None
             error_message = None
+            result_type = "unknown"
+            is_exact = 0
+            is_lower_bound = 0
 
             start = time.time()
             process.start()
@@ -166,6 +196,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                             compute_mode,
                             solver_called,
                             ilp_solver,
+                            result_type,
+                            is_exact,
+                            is_lower_bound,
                         ) = parse_mces_result(raw_result)
 
                     else:
@@ -191,7 +224,10 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                 solver_called,
                 ilp_solver,
                 raw_result,
-                error_message
+                error_message,
+                result_type,
+                is_exact,
+                is_lower_bound,
             ])
 
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
@@ -212,7 +248,10 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             "solverCalled",
             "ilp_solver",
             "raw_mces_result",
-            "error_message"
+            "error_message",
+            "result_type",
+            "is_exact",
+            "is_lower_bound",
         ])
 
         writer.writerows(results)
@@ -223,7 +262,7 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
 
 if __name__ == "__main__":
     freeze_support()
-    solvers = ["default","CPLEX_PY", "HiGHS_CMD"]
+    solvers = ["default","CPLEX_PY","HiGHS_CMD"] #,
     threads_list = [1, 4, 8, 24]
 
     for mass_min, mass_max in mass_ranges:
@@ -235,7 +274,7 @@ if __name__ == "__main__":
                         BASE_DIR
                         / "example"
                         / "filter_mass_diff_and_size"
-                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}.csv"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_2_approach.csv"
                 )
 
                 print(
