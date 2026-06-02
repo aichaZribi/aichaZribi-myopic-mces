@@ -67,6 +67,9 @@ def parse_mces_result(result):
     result_type = "unknown"
     is_exact = 0
     is_lower_bound = 0
+    actual_threshold = None
+    structural_lb = None
+    skipped_by_structural_lb = 0
 
     if result is None:
         return (
@@ -78,6 +81,9 @@ def parse_mces_result(result):
             result_type,
             is_exact,
             is_lower_bound,
+            actual_threshold,
+            structural_lb,
+            skipped_by_structural_lb,
         )
 
     if len(result) > 1:
@@ -91,6 +97,15 @@ def parse_mces_result(result):
 
     if len(result) > 4:
         ilp_solver = result[4]
+
+    if len(result) > 5:
+        actual_threshold = result[5]
+
+    if len(result) > 6:
+        structural_lb = result[6]
+
+    if len(result) > 7:
+        skipped_by_structural_lb = result[7]
 
     if ilp_solver not in [None, "", 0, "0", "None"]:
         solver_called = 1
@@ -111,6 +126,9 @@ def parse_mces_result(result):
         result_type,
         is_exact,
         is_lower_bound,
+        actual_threshold,
+        structural_lb,
+        skipped_by_structural_lb
     )
 
 
@@ -165,6 +183,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             result_type = "unknown"
             is_exact = 0
             is_lower_bound = 0
+            actual_threshold = None
+            structural_lb = None
+            skipped_by_structural_lb = 0
 
             start = time.time()
             process.start()
@@ -199,6 +220,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                             result_type,
                             is_exact,
                             is_lower_bound,
+                            actual_threshold,
+                            structural_lb,
+                            skipped_by_structural_lb
                         ) = parse_mces_result(raw_result)
 
                     else:
@@ -223,6 +247,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                 skipped,
                 solver_called,
                 ilp_solver,
+                actual_threshold,
+                structural_lb,
+                skipped_by_structural_lb,
                 raw_result,
                 error_message,
                 result_type,
@@ -247,6 +274,9 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             "skipped",
             "solverCalled",
             "ilp_solver",
+            "actual_threshold",
+            "structural_lb",
+            "skipped_by_structural_lb",
             "raw_mces_result",
             "error_message",
             "result_type",
@@ -262,8 +292,8 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
 
 if __name__ == "__main__":
     freeze_support()
-    solvers = ["default","CPLEX_PY","HiGHS_CMD"] #,
-    threads_list = [1, 4, 8, 24]
+    solvers = ["HiGHS_CMD"] #,"default","CPLEX_PY",
+    threads_list = [1, 4, 8]
 
     for mass_min, mass_max in mass_ranges:
 
