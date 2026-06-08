@@ -20,15 +20,19 @@ output_csv = BASE_DIR /"example"/"filter_mass_diff_and_size"/"filtered_pairs_800
 
 
 tolerance = 1.5
-TIME_LIMIT = 60
+TIME_LIMIT = 90
 
 mass_ranges = [
-    (0, 200),
-    (200, 300),
-    (300, 500),
-    (500, 800),
-    (800, 1000),
+    (500, 800)
 ]
+
+#mass_ranges = [
+#    (0, 200),
+#   (200, 300),
+#    (300, 500),
+#    (500, 800),
+#    (800, 1000),
+#]
 
 # =========================
 # HELPERS
@@ -45,7 +49,7 @@ def run_mces(smiles1, smiles2, solver_name, threads, queue):
     Run MCES in child process and send result back via queue.
     """
     try:
-        result = MCES(smiles1, smiles2,threshold_mode="dynamic", solver=solver_name, solver_options={"threads": threads})
+        result = MCES(smiles1, smiles2,threshold_mode="", solver=solver_name, solver_options={"threads": threads,"timeLimit":90})
         queue.put(("ok", result))
     except Exception as e:
         queue.put(("error", str(e)))
@@ -293,7 +297,7 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
 if __name__ == "__main__":
     freeze_support()
     solvers = ["HiGHS_CMD"] #,"default","CPLEX_PY",
-    threads_list = [1, 4, 8]
+    threads_list = [8]
 
     for mass_min, mass_max in mass_ranges:
 
@@ -304,7 +308,7 @@ if __name__ == "__main__":
                         BASE_DIR
                         / "example"
                         / "filter_mass_diff_and_size"
-                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_2_approach.csv"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_RASCAL_approach.csv"
                 )
 
                 print(

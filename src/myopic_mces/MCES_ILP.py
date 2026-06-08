@@ -16,80 +16,8 @@ import time
 from collections import defaultdict
 
 
-def structural_lower_bound(G1, G2):
-    """
-    Cheap valid lower bound:
-    if an edge in one graph has no compatible atom-type edge in the other graph,
-    then that edge must necessarily be unmatched.
-    """
-    lb = 0.0
-
-    for u, v in G1.edges:
-        atom_u = G1.nodes[u]["atom"]
-        atom_v = G1.nodes[v]["atom"]
-        has_compatible = any(
-            (G2.nodes[a]["atom"] == atom_u and G2.nodes[b]["atom"] == atom_v) or
-            (G2.nodes[a]["atom"] == atom_v and G2.nodes[b]["atom"] == atom_u)
-            for a, b in G2.edges
-        )
-        if not has_compatible:
-            lb += G1[u][v]["weight"]
-
-    for a, b in G2.edges:
-        atom_a = G2.nodes[a]["atom"]
-        atom_b = G2.nodes[b]["atom"]
-        has_compatible = any(
-            (G1.nodes[u]["atom"] == atom_a and G1.nodes[v]["atom"] == atom_b) or
-            (G1.nodes[u]["atom"] == atom_b and G1.nodes[v]["atom"] == atom_a)
-            for u, v in G1.edges
-        )
-        if not has_compatible:
-            lb += G2[a][b]["weight"]
-
-    return lb
 
 
-def solve_lp_relaxation(ILP, solver_options={}):
-    """
-    Temporarily relax all integer variables to continuous, solve the LP,
-    restore the variable categories, and return (status, objective_value).
-
-    Important: call this BEFORE adding the threshold constraint.
-    """
-    original_cats = {}
-    for v in ILP.variables():
-        original_cats[v.name] = v.cat
-        v.cat = pulp.LpContinuous
-
-    # Use CBC silently for the relaxation unless options override it.
-    lp_solver_options = dict(solver_options)
-    lp_solver_options.setdefault("msg", False)
-    sol = pulp.getSolver(solver="PULP_CBC_CMD", **lp_solver_options)
-
-    ILP.solve(sol)
-    lp_status = ILP.status
-    lp_value = pulp.value(ILP.objective)
-
-    for v in ILP.variables():
-        v.cat = original_cats[v.name]
-
-    return lp_status, lp_value
-
-
-def apply_warm_start(y, c, G1, G2):
-    """
-    Simple warm start: no nodes mapped, all edges initially unmatched.
-    This is feasible with the edge-coverage constraints.
-    """
-    for var in y.values():
-        var.setInitialValue(0)
-    for var in c.values():
-        var.setInitialValue(0)
-
-    for i in G1.edges:
-        c[tuple([i, -1])].setInitialValue(1)
-    for j in G2.edges:
-        c[tuple([-1, j])].setInitialValue(1)
 
 
 def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solver_options={}, no_ilp_threshold=False):
@@ -129,25 +57,6 @@ def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solv
     print(f"Threshold: {threshold}")
     actual_threshold = threshold
 
-
-    # Cheap structural lower bound.
-    # Respect no_ilp_threshold: if exact mode is requested, do not stop early.
-    lb_structural = structural_lower_bound(G1, G2)
-
-    skipped_by_structural_lb = 0
-
-    if threshold != -1 and not no_ilp_threshold and lb_structural > threshold:
-        skipped_by_structural_lb = 1
-
-        print("Structural LB exceeds threshold — skipping ILP")
-
-        return (
-            threshold,
-            2,
-            actual_threshold,
-            lb_structural,
-            skipped_by_structural_lb
-        )
 
     ILP = pulp.LpProblem("MCES", pulp.LpMinimize)
 
@@ -257,45 +166,17 @@ def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solv
                 rs.append(tuple([j[1], i]))
             ILP += pulp.lpSum([c[k] for k in ls]) <= pulp.lpSum([y[k] for k in rs])
 
-    # LP relaxation
-    #if threshold != -1 and not no_ilp_threshold:
-
-        #lp_status, lp_value = solve_lp_relaxation(ILP, solver_options=solver_options)
-
-
-        #print("LP relaxation status:", LpStatus.get(lp_status, lp_status))
-        #print("LP relaxation value:", lp_value)
-
-        #if lp_status == pulp.LpStatusOptimal and lp_value is not None and lp_value > threshold:
-            #print("LP relaxation exceeds threshold — skipping MIP solve")
-            #return threshold, 2
 
     # Constraint for the threshold, added only after LP relaxation pruning.
     if threshold != -1 and not no_ilp_threshold:
         ILP += objective_expr <= threshold
-
-    # Warm start after all variables and constraints are created.
-
-    apply_warm_start(y, c, G1, G2)
-
-    ILP.writeMPS("debug_mces.mps")
-    ILP.writeLP("debug_mces.lp")
-
     # Solve the ILP
     if solver == "default":
         sol = pulp.getSolver(solver="PULP_CBC_CMD", **solver_options)
     elif solver == "HiGHS_CMD":
-        sol = pulp.HiGHS(
-            msg=True,
-            timeLimit=60,
-            threads=24
-        )
+        sol = pulp.HiGHS(**solver_options)  # let caller control threads/timeLimit/msg
     elif solver == "CPLEX_PY":
-        sol = pulp.CPLEX_PY(
-            msg=True,
-            timeLimit=60,
-            threads=1
-        )
+        sol = pulp.CPLEX_PY(**solver_options)
     else:
         sol = pulp.getSolver(solver, **solver_options)
 
@@ -316,15 +197,11 @@ def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solv
         return (
             float(objective_value),
             1,
-            actual_threshold,
-            lb_structural,
-            skipped_by_structural_lb
+            actual_threshold
         )
     else:
         return (
             threshold,
             2,
-            actual_threshold,
-            lb_structural,
-            skipped_by_structural_lb
+            actual_threshold
         )

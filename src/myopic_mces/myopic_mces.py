@@ -71,7 +71,7 @@ def MCES(smiles1, smiles2, threshold=10,threshold_mode='', i=0, solver='default'
                 raise e
     # calculate MCES
     try:
-        distance, compute_mode, actual_threshold, structural_lb, skipped_by_structural_lb = MCES_ILP(G1, G2, threshold, threshold_mode, solver, solver_options=solver_options,
+        distance, compute_mode, actual_threshold = MCES_ILP(G1, G2, threshold, threshold_mode, solver, solver_options=solver_options,
                                           no_ilp_threshold=no_ilp_threshold)
         ilp_solver = 1
     except Exception as e:
@@ -81,7 +81,7 @@ def MCES(smiles1, smiles2, threshold=10,threshold_mode='', i=0, solver='default'
             compute_mode = 1
         else:
             raise e
-    return i, distance, time.time() - start, compute_mode, ilp_solver, actual_threshold, structural_lb, skipped_by_structural_lb
+    return i, distance, time.time() - start, compute_mode, ilp_solver, actual_threshold
 
 def hdf5_input(file_path):
     import h5py

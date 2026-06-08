@@ -73,6 +73,8 @@ def filter1(G1,G2):
                 difference+=sum([G2[j][k]["weight"] for k in G2.neighbors(j)])
     return difference/2
 
+
+
 def get_cost(G1,G2,i,j):
     """
      Calculates the cost for mapping node i to j based on neighborhood
@@ -138,7 +140,74 @@ def get_cost(G1,G2,i,j):
         if k not in atom_types1:
             for l in type_map2[k]:
                 difference+=G2[j][l]["weight"]/2
+
     return difference
+
+def filter3_rascal(G1, G2):
+    # Step 1: compatibility nodes
+    compat_nodes = []
+    for u in G1.nodes:
+        for v in G2.nodes:
+            if G1.nodes[u]["atom"] == G2.nodes[v]["atom"]:
+                compat_nodes.append((u, v))
+
+    if not compat_nodes:
+        total = (sum(G1[u][v]["weight"] for u, v in G1.edges)
+                 + sum(G2[u][v]["weight"] for u, v in G2.edges))
+        return total / 2
+
+    # Step 2: compatibility edges (edge-presence must agree AND weights match)
+    compat_adj = {node: set() for node in compat_nodes}
+    for idx1 in range(len(compat_nodes)):
+        u1, v1 = compat_nodes[idx1]
+        for idx2 in range(idx1 + 1, len(compat_nodes)):
+            u2, v2 = compat_nodes[idx2]
+            if u1 == u2 or v1 == v2:
+                continue
+            e1 = G1.has_edge(u1, u2)
+            e2 = G2.has_edge(v1, v2)
+            if e1 and e2:
+                if abs(G1[u1][u2]["weight"] - G2[v1][v2]["weight"]) < 0.01:
+                    compat_adj[(u1, v1)].add((u2, v2))
+                    compat_adj[(u2, v2)].add((u1, v1))
+            elif not e1 and not e2:
+                compat_adj[(u1, v1)].add((u2, v2))
+                compat_adj[(u2, v2)].add((u1, v1))
+
+    # Step 3: greedy clique — return the actual clique, not just size
+    def greedy_clique(adj, nodes):
+        if not nodes:
+            return []
+        best_clique = []
+        start_candidates = sorted(nodes, key=lambda x: len(adj[x]), reverse=True)
+        start_candidates = start_candidates[:min(5, len(start_candidates))]
+        for start in start_candidates:
+            clique = [start]
+            candidates = adj[start].copy()
+            while candidates:
+                next_node = max(candidates, key=lambda x: len(adj[x] & candidates))
+                clique.append(next_node)
+                candidates = candidates & adj[next_node]
+            if len(clique) > len(best_clique):
+                best_clique = clique
+        return best_clique
+
+    best_clique = greedy_clique(compat_adj, set(compat_nodes))
+
+    # Step 4: count ACTUAL shared edge weight induced by the clique in G1
+    common_edge_weight = 0.0
+    for idx1 in range(len(best_clique)):
+        u1, _ = best_clique[idx1]
+        for idx2 in range(idx1 + 1, len(best_clique)):
+            u2, _ = best_clique[idx2]
+            if G1.has_edge(u1, u2):
+                common_edge_weight += G1[u1][u2]["weight"]
+
+    total_edge_weight = (sum(G1[u][v]["weight"] for u, v in G1.edges)
+                         + sum(G2[u][v]["weight"] for u, v in G2.edges))
+
+    return max(0.0, total_edge_weight / 2 - common_edge_weight)
+
 
 def filter2(G1,G2):
     """
@@ -240,15 +309,28 @@ def apply_filter(G1,G2,threshold,always_stronger_bound=True):
 
     """
     if always_stronger_bound:
-        d=filter2(G1,G2)
+        # Original behaviour: filter2 is always used (status 4)
+        d = filter2(G1, G2)
+        # NEW: if filter2 still doesn't exceed threshold, try RASCAL
+        if d <= threshold:
+            d_rascal = filter3_rascal(G1, G2)
+            d = max(d, d_rascal)  # take the tighter (higher) bound
         return d, 4
+
     else:
-        #calculate first lower bound
-        d=filter1(G1,G2)
-        #if below threshold calculate second lower bound
-        if d<=threshold:
-            d=filter2(G1,G2)
-            if d<=threshold:
-                return d, 2
+        # Dynamic path: cheapest filter first
+        d = filter1(G1, G2)
+        if d > threshold:
+            return d, 2
+
+        d = filter2(G1, G2)
+        if d > threshold:
+            return d, 2
+
+        # NEW: RASCAL bound as last resort before ILP
+        d_rascal = filter3_rascal(G1, G2)
+        d = max(d, d_rascal)
+        if d > threshold:
+            return d, 2
 
         return d, 2
