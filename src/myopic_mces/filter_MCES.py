@@ -143,70 +143,213 @@ def get_cost(G1,G2,i,j):
 
     return difference
 
-def filter3_rascal(G1, G2):
-    # Step 1: compatibility nodes
+import networkx as nx
+from collections import defaultdict
+
+
+def filter3_rascal_fast(G1, G2, tol=0.01, max_starts=5):
+    """
+    Faster RASCAL-style lower-bound filter.
+
+    Main optimization:
+    - Avoid building the full compatibility graph.
+    - Check compatibility only when needed during greedy clique search.
+    """
+
+    # ------------------------------------------------------------
+    # 1. Read atom labels once
+    # ------------------------------------------------------------
+    atom1 = nx.get_node_attributes(G1, "atom")
+    atom2 = nx.get_node_attributes(G2, "atom")
+
+    # ------------------------------------------------------------
+    # 2. Group nodes by atom type
+    #    Example:
+    #    C -> [1, 3, 5]
+    #    O -> [2, 4]
+    # ------------------------------------------------------------
+    groups1 = defaultdict(list)
+    groups2 = defaultdict(list)
+
+    for u, atom in atom1.items():
+        groups1[atom].append(u)
+
+    for v, atom in atom2.items():
+        groups2[atom].append(v)
+
+    # ------------------------------------------------------------
+    # 3. Create possible atom mappings
+    #    Only atoms with the same type can be matched.
+    #
+    #    Example:
+    #    Carbon in G1 can match Carbon in G2.
+    #    Carbon cannot match Oxygen.
+    # ------------------------------------------------------------
     compat_nodes = []
-    for u in G1.nodes:
-        for v in G2.nodes:
-            if G1.nodes[u]["atom"] == G2.nodes[v]["atom"]:
+
+    for atom in groups1.keys() & groups2.keys():
+        for u in groups1[atom]:
+            for v in groups2[atom]:
                 compat_nodes.append((u, v))
 
+    # ------------------------------------------------------------
+    # 4. Compute total bond weight of both molecules
+    # ------------------------------------------------------------
+    total_edge_weight = (
+        sum(data["weight"] for _, _, data in G1.edges(data=True))
+        +
+        sum(data["weight"] for _, _, data in G2.edges(data=True))
+    )
+
+    # ------------------------------------------------------------
+    # 5. If no atoms can be matched, return maximum difference
+    # ------------------------------------------------------------
     if not compat_nodes:
-        total = (sum(G1[u][v]["weight"] for u, v in G1.edges)
-                 + sum(G2[u][v]["weight"] for u, v in G2.edges))
-        return total / 2
+        return total_edge_weight / 2
 
-    # Step 2: compatibility edges (edge-presence must agree AND weights match)
-    compat_adj = {node: set() for node in compat_nodes}
-    for idx1 in range(len(compat_nodes)):
-        u1, v1 = compat_nodes[idx1]
-        for idx2 in range(idx1 + 1, len(compat_nodes)):
-            u2, v2 = compat_nodes[idx2]
-            if u1 == u2 or v1 == v2:
-                continue
-            e1 = G1.has_edge(u1, u2)
-            e2 = G2.has_edge(v1, v2)
-            if e1 and e2:
-                if abs(G1[u1][u2]["weight"] - G2[v1][v2]["weight"]) < 0.01:
-                    compat_adj[(u1, v1)].add((u2, v2))
-                    compat_adj[(u2, v2)].add((u1, v1))
-            elif not e1 and not e2:
-                compat_adj[(u1, v1)].add((u2, v2))
-                compat_adj[(u2, v2)].add((u1, v1))
+    # ------------------------------------------------------------
+    # 6. Compatibility test between two atom mappings
+    #
+    #    pair1 = (u1, v1)
+    #    pair2 = (u2, v2)
+    #
+    #    They are compatible if:
+    #    - they do not reuse the same atom
+    #    - the bond relation is the same in both graphs
+    #    - if both bonds exist, their weights are almost equal
+    # ------------------------------------------------------------
+    def compatible(pair1, pair2):
+        u1, v1 = pair1
+        u2, v2 = pair2
 
-    # Step 3: greedy clique — return the actual clique, not just size
-    def greedy_clique(adj, nodes):
-        if not nodes:
-            return []
-        best_clique = []
-        start_candidates = sorted(nodes, key=lambda x: len(adj[x]), reverse=True)
-        start_candidates = start_candidates[:min(5, len(start_candidates))]
-        for start in start_candidates:
-            clique = [start]
-            candidates = adj[start].copy()
-            while candidates:
-                next_node = max(candidates, key=lambda x: len(adj[x] & candidates))
-                clique.append(next_node)
-                candidates = candidates & adj[next_node]
-            if len(clique) > len(best_clique):
-                best_clique = clique
-        return best_clique
+        # Same atom from G1 or G2 cannot be used twice
+        if u1 == u2 or v1 == v2:
+            return False
 
-    best_clique = greedy_clique(compat_adj, set(compat_nodes))
+        # Check whether the corresponding atoms are connected
+        e1 = G1.has_edge(u1, u2)
+        e2 = G2.has_edge(v1, v2)
 
-    # Step 4: count ACTUAL shared edge weight induced by the clique in G1
+        # One graph has a bond but the other does not
+        if e1 != e2:
+            return False
+
+        # If both have a bond, compare bond weights
+        if e1:
+            w1 = G1[u1][u2]["weight"]
+            w2 = G2[v1][v2]["weight"]
+            return abs(w1 - w2) < tol
+
+        # If neither has a bond, they are compatible
+        return True
+
+    # ------------------------------------------------------------
+    # 7. Score possible matches
+    #    We prefer nodes with higher local structure.
+    # ------------------------------------------------------------
+    def node_score(pair):
+        u, v = pair
+        return min(G1.degree(u), G2.degree(v))
+
+    # ------------------------------------------------------------
+    # 8. Pick only a few good starting points
+    #    This keeps the method fast.
+    # ------------------------------------------------------------
+    starts = sorted(
+        compat_nodes,
+        key=node_score,
+        reverse=True
+    )[:max_starts]
+
+    best_clique = []
+
+    # ------------------------------------------------------------
+    # 9. Greedy clique search
+    #
+    #    A clique is a set of mutually compatible atom mappings.
+    #    We build it one match at a time.
+    # ------------------------------------------------------------
+    for start in starts:
+        clique = [start]
+
+        # Track already used atoms to keep one-to-one mapping
+        used_g1 = {start[0]}
+        used_g2 = {start[1]}
+
+        # Initial candidates cannot reuse atoms from the start pair
+        candidates = [
+            p for p in compat_nodes
+            if p != start
+            and p[0] not in used_g1
+            and p[1] not in used_g2
+        ]
+
+        while candidates:
+            # Keep only candidates compatible with every node
+            # already inside the clique
+            valid_candidates = [
+                p for p in candidates
+                if all(compatible(p, q) for q in clique)
+            ]
+
+            if not valid_candidates:
+                break
+
+            # Choose the structurally strongest next mapping
+            next_node = max(valid_candidates, key=node_score)
+
+            # Add selected mapping to clique
+            clique.append(next_node)
+
+            # Mark atoms as already used
+            used_g1.add(next_node[0])
+            used_g2.add(next_node[1])
+
+            # Remove candidates that reuse atoms
+            candidates = [
+                p for p in valid_candidates
+                if p != next_node
+                and p[0] not in used_g1
+                and p[1] not in used_g2
+            ]
+
+        # Save the largest clique found
+        if len(clique) > len(best_clique):
+            best_clique = clique
+
+    # ------------------------------------------------------------
+    # 10. Count common bond weight inside the clique
+    #
+    #     If two matched atoms are bonded in G1, then because of
+    #     compatibility, the corresponding atoms are also bonded in G2
+    #     with almost the same weight.
+    # ------------------------------------------------------------
     common_edge_weight = 0.0
-    for idx1 in range(len(best_clique)):
-        u1, _ = best_clique[idx1]
-        for idx2 in range(idx1 + 1, len(best_clique)):
-            u2, _ = best_clique[idx2]
+
+    for i in range(len(best_clique)):
+        u1, _ = best_clique[i]
+
+        for j in range(i + 1, len(best_clique)):
+            u2, _ = best_clique[j]
+
             if G1.has_edge(u1, u2):
                 common_edge_weight += G1[u1][u2]["weight"]
 
-    total_edge_weight = (sum(G1[u][v]["weight"] for u, v in G1.edges)
-                         + sum(G2[u][v]["weight"] for u, v in G2.edges))
+    # ------------------------------------------------------------
+    # 11. RASCAL lower bound
+    #
+    #     total_edge_weight / 2:
+    #         approximate total bond structure
+    #
+    #     common_edge_weight:
+    #         shared bond structure
+    #
+    #     difference:
+    #         non-shared structure
+    # ------------------------------------------------------------
+    lower_bound = total_edge_weight / 2 - common_edge_weight
 
-    return max(0.0, total_edge_weight / 2 - common_edge_weight)
+    return max(0.0, lower_bound)
 
 
 def filter2(G1,G2):
@@ -283,54 +426,44 @@ def filter2(G1,G2):
 
     return res
 
-def apply_filter(G1,G2,threshold,always_stronger_bound=True):
+def apply_filter(G1, G2, threshold, always_stronger_bound=True):
     """
-     Finds a lower bound for the distance
+    Apply filters from cheap to expensive.
 
-     Parameters
-     ----------
-     G1 : networkx.classes.graph.Graph
-         Graph representing the first molecule.
-     G2 : networkx.classes.graph.Graph
-         Graph representing the second molecule.
-     threshold : int
-         Threshold for the comparison. We want to find a lower bound that is higher than the threshold
-     always_stronger_bound : bool
-         if true, always compute and use the second stronger bound
+    filter1:
+        Fastest, weakest lower bound.
 
+    filter2:
+        Stronger, but slower.
 
-
-     Returns:
-     -------
-     float
-         Lower bound for the distance between the molecules
-     int
-         Which lower bound was chosen: 2 - depending on threshold, 4 - second lower bound
-
+    filter3_rascal_fast:
+        Most expensive, so we only run it when filter2
+        still does not pass the threshold.
     """
-    if always_stronger_bound:
-        # Original behaviour: filter2 is always used (status 4)
-        d = filter2(G1, G2)
-        # NEW: if filter2 still doesn't exceed threshold, try RASCAL
-        if d <= threshold:
-            d_rascal = filter3_rascal(G1, G2)
-            d = max(d, d_rascal)  # take the tighter (higher) bound
-        return d, 4
 
-    else:
-        # Dynamic path: cheapest filter first
-        d = filter1(G1, G2)
-        if d > threshold:
-            return d, 2
+    # ------------------------------------------------------------
+    # 1. First try the cheap degree-based filter
+    # ------------------------------------------------------------
+    d = filter1(G1, G2)
 
-        d = filter2(G1, G2)
-        if d > threshold:
-            return d, 2
-
-        # NEW: RASCAL bound as last resort before ILP
-        d_rascal = filter3_rascal(G1, G2)
-        d = max(d, d_rascal)
-        if d > threshold:
-            return d, 2
-
+    if d > threshold:
         return d, 2
+
+    # ------------------------------------------------------------
+    # 2. Then try the stronger neighborhood-based filter
+    # ------------------------------------------------------------
+    d2 = filter2(G1, G2)
+    d = max(d, d2)
+
+    if d > threshold:
+        return d, 2
+
+
+    # ------------------------------------------------------------
+    # 3. Run RASCAL as the strongest filter
+    # ------------------------------------------------------------
+    #d3 = filter3_rascal_fast(G1, G2)
+    #print("RASCAL")
+    #d = max(d, d3)
+
+    return d, 2

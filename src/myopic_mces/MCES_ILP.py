@@ -20,7 +20,7 @@ from collections import defaultdict
 
 
 
-def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solver_options={}, no_ilp_threshold=False):
+def MCES_ILP(G1, G2, threshold,  solver='default', solver_options={}, no_ilp_threshold=False):
     """
      Calculates the exact distance between two molecules using an ILP
 
@@ -50,9 +50,9 @@ def MCES_ILP(G1, G2, threshold, threshold_mode="dynamic", solver='default', solv
     """
 
     # Dynamic threshold
-    if threshold_mode == "dynamic":
-        max_edges = max(G1.number_of_edges(), G2.number_of_edges())
-        threshold = max(1, min(10, int(0.1 * max_edges)))
+    #if threshold_mode == "dynamic":
+    #    max_edges = max(G1.number_of_edges(), G2.number_of_edges())
+    #   threshold = max(1, min(10, int(0.1 * max_edges)))
 
     print(f"Threshold: {threshold}")
     actual_threshold = threshold
