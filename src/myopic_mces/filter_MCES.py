@@ -6,6 +6,38 @@ Created on Sat Oct 17 17:59:05 2020
 """
 
 import networkx as nx
+from collections import Counter
+
+def bond_signature(G, u, v):
+    atom_u = G.nodes[u]["atom"]
+    atom_v = G.nodes[v]["atom"]
+
+    # sort atom types so C-O and O-C are treated the same
+    a1, a2 = sorted([atom_u, atom_v])
+
+    weight = G[u][v]["weight"]
+
+    return (a1, a2, weight)
+
+
+def filter3_bond_inventory(G1, G2):
+    bonds1 = Counter()
+    bonds2 = Counter()
+
+    for u, v in G1.edges():
+        bonds1[bond_signature(G1, u, v)] += 1
+
+    for u, v in G2.edges():
+        bonds2[bond_signature(G2, u, v)] += 1
+
+    all_bond_types = set(bonds1.keys()) | set(bonds2.keys())
+
+    difference = 0
+
+    for bond_type in all_bond_types:
+        difference += abs(bonds1[bond_type] - bonds2[bond_type])
+
+    return difference
 
 def filter1(G1,G2):
     """
@@ -465,5 +497,13 @@ def apply_filter(G1, G2, threshold, always_stronger_bound=True):
     #d3 = filter3_rascal_fast(G1, G2)
     #print("RASCAL")
     #d = max(d, d3)
+
+    d3 = filter3_bond_inventory(G1, G2)
+    d = max(d, d3)
+
+    if d > threshold:
+        return d, 2
+
+    return d, 1
 
     return d, 2

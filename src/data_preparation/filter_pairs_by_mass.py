@@ -20,7 +20,7 @@ output_csv = BASE_DIR /"example"/"filter_mass_diff_and_size"/"filtered_pairs_800
 
 
 tolerance = 1.5
-TIME_LIMIT = 120
+TIME_LIMIT = 60
 
 mass_ranges = [
     (500, 800)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
                         BASE_DIR
                         / "example"
                         / "filter_mass_diff_and_size"
-                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_rascal_approach2_no_limit.csv"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_rascal_approach3.csv"
                 )
 
                 print(
