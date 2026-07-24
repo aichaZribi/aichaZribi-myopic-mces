@@ -23,7 +23,7 @@ tolerance = 1.5
 TIME_LIMIT = 60
 
 mass_ranges = [
-    (500, 800)
+    (800, 1000)
 ]
 
 #mass_ranges = [
