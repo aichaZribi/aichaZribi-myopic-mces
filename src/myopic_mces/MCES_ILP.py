@@ -175,8 +175,14 @@ def MCES_ILP(G1, G2, threshold,  solver='default', solver_options={}, no_ilp_thr
         sol = pulp.getSolver(solver="PULP_CBC_CMD", **solver_options)
     elif solver == "HiGHS_CMD":
         sol = pulp.HiGHS(**solver_options)  # let caller control threads/timeLimit/msg
-    elif solver == "CPLEX_PY":
-        sol = pulp.CPLEX_PY(**solver_options)
+    elif solver == "CPLEX_CMD":
+        sol = pulp.CPLEX_CMD(
+            path=r"C:\Program Files\IBM\ILOG\CPLEX_Studio222\cplex\bin\x64_win64\cplex.exe",
+            **solver_options
+        )
+
+        print("Using CPLEX:", sol.path)
+
     else:
         sol = pulp.getSolver(solver, **solver_options)
 

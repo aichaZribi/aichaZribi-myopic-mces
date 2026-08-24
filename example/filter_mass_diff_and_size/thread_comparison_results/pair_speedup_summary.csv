@@ -1,0 +1,4 @@
+threads,mean_speedup,median_speedup,pairs_faster_than_1_thread,total_compared_pairs
+2,1.118,1.085,27,40
+4,1.173,1.077,23,40
+8,1.324,1.253,36,40

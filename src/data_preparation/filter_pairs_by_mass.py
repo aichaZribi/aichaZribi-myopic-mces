@@ -22,17 +22,15 @@ output_csv = BASE_DIR /"example"/"filter_mass_diff_and_size"/"filtered_pairs_800
 tolerance = 1.5
 TIME_LIMIT = 60
 
-mass_ranges = [
-    (800, 1000)
-]
 
-#mass_ranges = [
-#    (0, 200),
-#   (200, 300),
-#    (300, 500),
-#    (500, 800),
-#    (800, 1000),
-#]
+
+mass_ranges = [
+    #(0, 200),
+   #(200, 300),
+    #(300, 500),
+    (500, 800),
+    # (800, 1000),
+]
 
 # =========================
 # HELPERS
@@ -72,8 +70,6 @@ def parse_mces_result(result):
     is_exact = 0
     is_lower_bound = 0
     actual_threshold = None
-    structural_lb = None
-    skipped_by_structural_lb = 0
 
     if result is None:
         return (
@@ -85,9 +81,7 @@ def parse_mces_result(result):
             result_type,
             is_exact,
             is_lower_bound,
-            actual_threshold,
-            structural_lb,
-            skipped_by_structural_lb,
+            actual_threshold
         )
 
     if len(result) > 1:
@@ -105,11 +99,7 @@ def parse_mces_result(result):
     if len(result) > 5:
         actual_threshold = result[5]
 
-    if len(result) > 6:
-        structural_lb = result[6]
 
-    if len(result) > 7:
-        skipped_by_structural_lb = result[7]
 
     if ilp_solver not in [None, "", 0, "0", "None"]:
         solver_called = 1
@@ -131,8 +121,6 @@ def parse_mces_result(result):
         is_exact,
         is_lower_bound,
         actual_threshold,
-        structural_lb,
-        skipped_by_structural_lb
     )
 
 
@@ -188,8 +176,6 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             is_exact = 0
             is_lower_bound = 0
             actual_threshold = None
-            structural_lb = None
-            skipped_by_structural_lb = 0
 
             start = time.time()
             process.start()
@@ -225,8 +211,6 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                             is_exact,
                             is_lower_bound,
                             actual_threshold,
-                            structural_lb,
-                            skipped_by_structural_lb
                         ) = parse_mces_result(raw_result)
 
                     else:
@@ -252,8 +236,6 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                 solver_called,
                 ilp_solver,
                 actual_threshold,
-                structural_lb,
-                skipped_by_structural_lb,
                 raw_result,
                 error_message,
                 result_type,
@@ -279,8 +261,6 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             "solverCalled",
             "ilp_solver",
             "actual_threshold",
-            "structural_lb",
-            "skipped_by_structural_lb",
             "raw_mces_result",
             "error_message",
             "result_type",
@@ -296,8 +276,8 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
 
 if __name__ == "__main__":
     freeze_support()
-    solvers = ["HiGHS_CMD"] #,"default","CPLEX_PY",
-    threads_list = [8]
+    solvers = ["HiGHS_CMD"] #,,"default","HiGHS_CMD","CPLEX_PY"
+    threads_list = [4]
 
     for mass_min, mass_max in mass_ranges:
 
@@ -308,7 +288,7 @@ if __name__ == "__main__":
                         BASE_DIR
                         / "example"
                         / "filter_mass_diff_and_size"
-                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_rascal_approach3.csv"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_filters.csv"
                 )
 
                 print(

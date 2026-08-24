@@ -1,0 +1,5 @@
+threads,completed_solver_calls,total_solver_pair_runtime_sec,mean_solver_pair_runtime_sec,median_solver_pair_runtime_sec,std_solver_pair_runtime_sec,mean_runtime_inside_mces,median_runtime_inside_mces
+1,40,581.163,14.529,13.312,8.136,12.491,11.221
+2,44,705.648,16.037,12.784,12.229,14.248,11.663
+4,46,778.785,16.93,13.04,14.614,15.503,11.484
+8,47,800.971,17.042,10.683,15.468,15.57,9.033

@@ -1,0 +1,5 @@
+threads,completed_pairs,total_completed_runtime_sec,mean_completed_runtime_sec,median_completed_runtime_sec,std_completed_runtime_sec,mean_mces_runtime_sec,median_mces_runtime_sec
+1,107,723.563,6.762,2.607,7.862,4.698,0.012
+2,111,799.274,7.201,1.829,10.514,5.667,0.006
+4,113,873.387,7.729,1.851,12.023,6.329,0.008
+8,114,904.67,7.936,1.843,12.522,6.439,0.01

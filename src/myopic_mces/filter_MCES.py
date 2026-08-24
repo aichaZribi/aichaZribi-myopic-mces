@@ -1091,6 +1091,7 @@ def apply_filter(
     # --------------------------------------------------------
 
     d1 = filter1(G1, G2)
+
     d = d1
 
     if d > threshold:
@@ -1098,11 +1099,11 @@ def apply_filter(
 
     # --------------------------------------------------------
     # 2. Labeled bond-inventory lower bound
-    # --------------------------------------------------------
 
     d_bond = filter3_bond_inventory(G1, G2)
     d = max(d, d_bond)
 
+    # --------------------------------------------------------
     if d > threshold:
         return d, 2
 
@@ -1111,6 +1112,7 @@ def apply_filter(
     # --------------------------------------------------------
 
     d2 = filter2(G1, G2)
+
     d = max(d, d2)
 
     if d > threshold:
