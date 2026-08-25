@@ -12,6 +12,107 @@ from collections import defaultdict
 
 
 # ============================================================
+# Incident inventory lower bound
+# ============================================================
+
+def filter4_incident_inventory(G1, G2):
+    """
+    Safe lower bound based on directed atom-bond incidences.
+
+    Each undirected molecular bond is represented twice:
+
+        atom_u -> atom_v
+        atom_v -> atom_u
+
+    using:
+
+        (central_atom, neighbour_atom, bond_weight)
+
+    Because every molecular bond is counted twice, the final
+    difference is divided by 4:
+
+        - divide by 2 because each edge appears at both endpoints
+        - divide by 2 according to the MCES distance definition
+    """
+
+    inventory1 = Counter()
+    inventory2 = Counter()
+
+    # --------------------------------------------------------
+    # Build directed incidence inventory for G1
+    # --------------------------------------------------------
+
+    for node in G1.nodes():
+
+        central_atom = G1.nodes[node]["atom"]
+
+        for neighbour in G1.neighbors(node):
+
+            neighbour_atom = G1.nodes[neighbour]["atom"]
+            bond_weight = G1[node][neighbour]["weight"]
+
+            signature = (
+                central_atom,
+                neighbour_atom,
+                bond_weight
+            )
+
+            inventory1[signature] += 1
+
+    # --------------------------------------------------------
+    # Build directed incidence inventory for G2
+    # --------------------------------------------------------
+
+    for node in G2.nodes():
+
+        central_atom = G2.nodes[node]["atom"]
+
+        for neighbour in G2.neighbors(node):
+
+            neighbour_atom = G2.nodes[neighbour]["atom"]
+            bond_weight = G2[node][neighbour]["weight"]
+
+            signature = (
+                central_atom,
+                neighbour_atom,
+                bond_weight
+            )
+
+            inventory2[signature] += 1
+
+    # --------------------------------------------------------
+    # Compare inventories
+    # --------------------------------------------------------
+
+    difference = 0.0
+
+    all_signatures = inventory1.keys() | inventory2.keys()
+
+    for signature in all_signatures:
+
+        bond_weight = signature[2]
+
+        count_difference = abs(
+            inventory1[signature]
+            - inventory2[signature]
+        )
+
+        difference += (
+            bond_weight
+            * count_difference
+        )
+
+    # Every molecular bond occurs twice in the incidence
+    # inventory, once from each endpoint.
+    #
+    # The MCES distance convention also effectively divides
+    # total unmatched bond weight by two.
+    #
+    # Therefore:
+    return difference / 4.0
+
+
+# ============================================================
 # Bond inventory filter
 # ============================================================
 
@@ -1065,65 +1166,71 @@ def apply_filter(
     threshold,
     always_stronger_bound=True
 ):
-    """
-    Apply safe filters from cheapest to most expensive.
-
-    Return values
-    -------------
-    (distance_bound, 2)
-        The lower bound exceeds the threshold, so the exact
-        solver does not need to be called.
-
-    (distance_bound, 1)
-        The lower bound does not exceed the threshold, so the
-        exact solver must be called.
-
-    Notes
-    -----
-    The greedy filter3_rascal_fast function is intentionally
-    not used for rejection because it produces a feasible common
-    subgraph rather than a guaranteed upper bound on the optimal
-    common subgraph.
-    """
 
     # --------------------------------------------------------
-    # 1. Degree-based lower bound
+    # 1. Original weighted-degree bound
     # --------------------------------------------------------
 
     d1 = filter1(G1, G2)
-
     d = d1
 
     if d > threshold:
         return d, 2
 
     # --------------------------------------------------------
-    # 2. Labeled bond-inventory lower bound
+    # 2. Bond inventory
+    # --------------------------------------------------------
 
     d_bond = filter3_bond_inventory(G1, G2)
     d = max(d, d_bond)
 
-    # --------------------------------------------------------
     if d > threshold:
         return d, 2
 
     # --------------------------------------------------------
-    # 3. Original neighborhood-assignment lower bound
+    # 3. NEW: directed incident inventory
+    # --------------------------------------------------------
+
+    d_incident = filter4_incident_inventory(
+        G1,
+        G2
+    )
+
+    d = max(
+        d,
+        d_incident
+    )
+
+    if d > threshold:
+        return d, 2
+
+    # --------------------------------------------------------
+    # 4. Original neighborhood assignment
     # --------------------------------------------------------
 
     d2 = filter2(G1, G2)
 
-    d = max(d, d2)
+    d = max(
+        d,
+        d2
+    )
 
     if d > threshold:
         return d, 2
 
     # --------------------------------------------------------
-    # 4. RASCAL-inspired incident-signature assignment
+    # 5. RASCAL-inspired assignment
     # --------------------------------------------------------
 
-    d_rascal = filter_rascal_second_tier(G1, G2)
-    d = max(d, d_rascal)
+    d_rascal = filter_rascal_second_tier(
+        G1,
+        G2
+    )
+
+    d = max(
+        d,
+        d_rascal
+    )
 
     if d > threshold:
         return d, 2
