@@ -6,110 +6,10 @@ Created on Sat Oct 17 17:59:05 2020
 """
 
 import networkx as nx
-
 from collections import Counter
-from collections import defaultdict
 
 
-# ============================================================
-# Incident inventory lower bound
-# ============================================================
 
-def filter4_incident_inventory(G1, G2):
-    """
-    Safe lower bound based on directed atom-bond incidences.
-
-    Each undirected molecular bond is represented twice:
-
-        atom_u -> atom_v
-        atom_v -> atom_u
-
-    using:
-
-        (central_atom, neighbour_atom, bond_weight)
-
-    Because every molecular bond is counted twice, the final
-    difference is divided by 4:
-
-        - divide by 2 because each edge appears at both endpoints
-        - divide by 2 according to the MCES distance definition
-    """
-
-    inventory1 = Counter()
-    inventory2 = Counter()
-
-    # --------------------------------------------------------
-    # Build directed incidence inventory for G1
-    # --------------------------------------------------------
-
-    for node in G1.nodes():
-
-        central_atom = G1.nodes[node]["atom"]
-
-        for neighbour in G1.neighbors(node):
-
-            neighbour_atom = G1.nodes[neighbour]["atom"]
-            bond_weight = G1[node][neighbour]["weight"]
-
-            signature = (
-                central_atom,
-                neighbour_atom,
-                bond_weight
-            )
-
-            inventory1[signature] += 1
-
-    # --------------------------------------------------------
-    # Build directed incidence inventory for G2
-    # --------------------------------------------------------
-
-    for node in G2.nodes():
-
-        central_atom = G2.nodes[node]["atom"]
-
-        for neighbour in G2.neighbors(node):
-
-            neighbour_atom = G2.nodes[neighbour]["atom"]
-            bond_weight = G2[node][neighbour]["weight"]
-
-            signature = (
-                central_atom,
-                neighbour_atom,
-                bond_weight
-            )
-
-            inventory2[signature] += 1
-
-    # --------------------------------------------------------
-    # Compare inventories
-    # --------------------------------------------------------
-
-    difference = 0.0
-
-    all_signatures = inventory1.keys() | inventory2.keys()
-
-    for signature in all_signatures:
-
-        bond_weight = signature[2]
-
-        count_difference = abs(
-            inventory1[signature]
-            - inventory2[signature]
-        )
-
-        difference += (
-            bond_weight
-            * count_difference
-        )
-
-    # Every molecular bond occurs twice in the incidence
-    # inventory, once from each endpoint.
-    #
-    # The MCES distance convention also effectively divides
-    # total unmatched bond weight by two.
-    #
-    # Therefore:
-    return difference / 4.0
 
 
 # ============================================================
@@ -169,11 +69,7 @@ def filter3_bond_inventory(G1, G2):
 
     for signature in all_signatures:
         bond_weight = signature[2]
-
-        count_difference = abs(
-            bonds1[signature] - bonds2[signature]
-        )
-
+        count_difference = abs(bonds1[signature] - bonds2[signature])
         difference += bond_weight * count_difference
 
     # The distance definition counts the difference between
@@ -181,302 +77,7 @@ def filter3_bond_inventory(G1, G2):
     return difference / 2.0
 
 
-# ============================================================
-# RASCAL-inspired second-tier filter
-# ============================================================
 
-def incident_signature(G, node):
-    """
-    Return the multiset of labeled bonds incident to one atom.
-
-    Each incident bond is represented by:
-    - neighbouring atom type
-    - bond weight
-
-    The central atom type does not need to be included because
-    atoms are already matched only within the same atom type.
-    """
-
-    incident_bonds = []
-
-    for neighbour in G.neighbors(node):
-        neighbour_atom = G.nodes[neighbour]["atom"]
-        bond_weight = G[node][neighbour]["weight"]
-
-        incident_bonds.append(
-            (neighbour_atom, bond_weight)
-        )
-
-    return Counter(incident_bonds)
-
-
-def incident_signature_cost(signature1, signature2):
-    """
-    Calculate the relaxed cost between two incident-bond
-    signatures.
-
-    Each unmatched incident bond contributes half its weight
-    because every molecular bond is observed from both of its
-    endpoint atoms.
-    """
-
-    cost = 0.0
-
-    all_codes = signature1.keys() | signature2.keys()
-
-    for code in all_codes:
-        bond_weight = code[1]
-
-        difference = abs(
-            signature1[code] - signature2[code]
-        )
-
-        cost += difference * bond_weight / 2.0
-
-    return cost
-
-
-def unmatched_node_cost(signature):
-    """
-    Cost of leaving one atom unmatched.
-
-    All bonds incident to the atom are considered unmatched.
-    Each contributes half its weight.
-    """
-
-    return sum(
-        count * code[1] / 2.0
-        for code, count in signature.items()
-    )
-
-
-def filter_rascal_second_tier(G1, G2):
-    """
-    RASCAL-inspired second-tier lower bound.
-
-    Atoms are separated by atom type. For each atom type,
-    a minimum-cost bipartite assignment is solved.
-
-    Matching costs are based on the complete multiset of
-    neighboring atom types and bond weights.
-
-    Dummy nodes represent atoms that cannot be matched because
-    one molecule has more atoms of a given type.
-    """
-
-    atom_types1 = {
-        data["atom"]
-        for _, data in G1.nodes(data=True)
-    }
-
-    atom_types2 = {
-        data["atom"]
-        for _, data in G2.nodes(data=True)
-    }
-
-    atom_types = atom_types1 | atom_types2
-
-    signatures1 = {
-        node: incident_signature(G1, node)
-        for node in G1.nodes()
-    }
-
-    signatures2 = {
-        node: incident_signature(G2, node)
-        for node in G2.nodes()
-    }
-
-    total_bound = 0.0
-
-    for atom_type in atom_types:
-
-        nodes1 = [
-            node
-            for node in G1.nodes()
-            if G1.nodes[node]["atom"] == atom_type
-        ]
-
-        nodes2 = [
-            node
-            for node in G2.nodes()
-            if G2.nodes[node]["atom"] == atom_type
-        ]
-
-        # Nothing to process for this atom type.
-        if not nodes1 and not nodes2:
-            continue
-
-        assignment_graph = nx.Graph()
-
-        left_nodes = [
-            ("g1", atom_type, node)
-            for node in nodes1
-        ]
-
-        right_nodes = [
-            ("g2", atom_type, node)
-            for node in nodes2
-        ]
-
-        assignment_graph.add_nodes_from(
-            left_nodes,
-            bipartite=0
-        )
-
-        assignment_graph.add_nodes_from(
-            right_nodes,
-            bipartite=1
-        )
-
-        # ----------------------------------------------------
-        # Add real atom-to-atom mapping possibilities.
-        # ----------------------------------------------------
-
-        for node1 in nodes1:
-            left_node = ("g1", atom_type, node1)
-
-            for node2 in nodes2:
-                right_node = ("g2", atom_type, node2)
-
-                cost = incident_signature_cost(
-                    signatures1[node1],
-                    signatures2[node2]
-                )
-
-                assignment_graph.add_edge(
-                    left_node,
-                    right_node,
-                    weight=cost
-                )
-
-        # ----------------------------------------------------
-        # Add dummy atoms when G1 has fewer atoms.
-        # ----------------------------------------------------
-
-        if len(nodes1) < len(nodes2):
-
-            number_of_dummies = len(nodes2) - len(nodes1)
-
-            for dummy_id in range(number_of_dummies):
-
-                dummy = (
-                    "g1_dummy",
-                    atom_type,
-                    dummy_id
-                )
-
-                assignment_graph.add_node(
-                    dummy,
-                    bipartite=0
-                )
-
-                for node2 in nodes2:
-
-                    right_node = (
-                        "g2",
-                        atom_type,
-                        node2
-                    )
-
-                    deletion_cost = unmatched_node_cost(
-                        signatures2[node2]
-                    )
-
-                    assignment_graph.add_edge(
-                        dummy,
-                        right_node,
-                        weight=deletion_cost
-                    )
-
-        # ----------------------------------------------------
-        # Add dummy atoms when G2 has fewer atoms.
-        # ----------------------------------------------------
-
-        elif len(nodes2) < len(nodes1):
-
-            number_of_dummies = len(nodes1) - len(nodes2)
-
-            for dummy_id in range(number_of_dummies):
-
-                dummy = (
-                    "g2_dummy",
-                    atom_type,
-                    dummy_id
-                )
-
-                assignment_graph.add_node(
-                    dummy,
-                    bipartite=1
-                )
-
-                for node1 in nodes1:
-
-                    left_node = (
-                        "g1",
-                        atom_type,
-                        node1
-                    )
-
-                    deletion_cost = unmatched_node_cost(
-                        signatures1[node1]
-                    )
-
-                    assignment_graph.add_edge(
-                        left_node,
-                        dummy,
-                        weight=deletion_cost
-                    )
-
-        left_partition = {
-            node
-            for node, data
-            in assignment_graph.nodes(data=True)
-            if data.get("bipartite") == 0
-        }
-
-        right_partition = {
-            node
-            for node, data
-            in assignment_graph.nodes(data=True)
-            if data.get("bipartite") == 1
-        }
-
-        if not left_partition or not right_partition:
-            continue
-
-        matching = (
-            nx.algorithms.bipartite.minimum_weight_full_matching(
-                assignment_graph,
-                top_nodes=left_partition,
-                weight="weight"
-            )
-        )
-
-        # The returned dictionary contains every match twice:
-        #
-        # left -> right
-        # right -> left
-        #
-        # Therefore, only entries belonging to the left
-        # partition are counted.
-        for left_node in left_partition:
-
-            matched_node = matching.get(left_node)
-
-            if matched_node is None:
-                continue
-
-            total_bound += assignment_graph[
-                left_node
-            ][
-                matched_node
-            ]["weight"]
-
-    # Do not divide by two again here.
-    #
-    # incident_signature_cost() already assigns half of each
-    # bond mismatch to each endpoint.
-    return total_bound
 
 
 # ============================================================
@@ -515,14 +116,12 @@ def filter1(G1, G2):
         type_map1[atom_type] = [
             node
             for node in G1.nodes
-            if G1.nodes[node]["atom"] == atom_type
-        ]
+            if G1.nodes[node]["atom"] == atom_type]
 
     atom_types2 = []
 
     for node in G2.nodes:
         atom_type = G2.nodes[node]["atom"]
-
         if atom_type not in atom_types2:
             atom_types2.append(atom_type)
 
@@ -541,10 +140,7 @@ def filter1(G1, G2):
 
         if atom_type in atom_types2:
 
-            number_mapped = min(
-                len(type_map1[atom_type]),
-                len(type_map2[atom_type])
-            )
+            number_mapped = min( len(type_map1[atom_type]), len(type_map2[atom_type]))
 
             degree_list1 = sorted(
                 type_map1[atom_type],
@@ -595,25 +191,18 @@ def filter1(G1, G2):
 
             if len(degree_list2) > number_mapped:
 
-                for index in range(
-                    number_mapped,
-                    len(degree_list2)
-                ):
-
+                for index in range(number_mapped, len(degree_list2)):
                     difference += sum(
                         G2[degree_list2[index]][neighbour]["weight"]
                         for neighbour
-                        in G2.neighbors(degree_list2[index])
-                    )
+                        in G2.neighbors(degree_list2[index]))
 
         else:
 
             for node in type_map1[atom_type]:
 
-                difference += sum(
-                    G1[node][neighbour]["weight"]
-                    for neighbour in G1.neighbors(node)
-                )
+                difference += sum( G1[node][neighbour]["weight"]
+                    for neighbour in G1.neighbors(node) )
 
     for atom_type in atom_types2:
 
@@ -621,8 +210,7 @@ def filter1(G1, G2):
 
             for node in type_map2[atom_type]:
 
-                difference += sum(
-                    G2[node][neighbour]["weight"]
+                difference += sum(G2[node][neighbour]["weight"]
                     for neighbour in G2.neighbors(node)
                 )
 
@@ -731,9 +319,7 @@ def get_cost(G1, G2, i, j):
                 difference += G1[i][neighbour]["weight"] / 2.0
 
     for atom_type in atom_types2:
-
         if atom_type not in atom_types1:
-
             for neighbour in type_map2[atom_type]:
                 difference += G2[j][neighbour]["weight"] / 2.0
 
@@ -743,200 +329,238 @@ def get_cost(G1, G2, i, j):
 # ============================================================
 # Greedy RASCAL-style clique search
 # ============================================================
-
-def filter3_rascal_fast(G1, G2, tol=0.01, max_starts=5):
+def incident_signature(G, node):
     """
-    Greedy RASCAL-style common-subgraph search.
+    Return the multiset of labeled bonds incident to one atom.
 
-    Important
-    ---------
-    This function finds a feasible common subgraph. It does not
-    produce a guaranteed safe lower bound for rejecting molecule
-    pairs.
+    Each incident bond is represented by:
+    - neighbouring atom type
+    - bond weight
 
-    It can be used as:
-    - a heuristic result;
-    - a warm start for the exact solver;
-    - an initial feasible MCES solution.
-
-    It should not be used with:
-
-        if result > threshold:
-            reject pair
+    The central atom type does not need to be included because
+    atoms are already matched only within the same atom type.
     """
 
-    atom1 = nx.get_node_attributes(G1, "atom")
-    atom2 = nx.get_node_attributes(G2, "atom")
+    incident_bonds = []
 
-    groups1 = defaultdict(list)
-    groups2 = defaultdict(list)
+    for neighbour in G.neighbors(node):
+        neighbour_atom = G.nodes[neighbour]["atom"]
+        bond_weight = G[node][neighbour]["weight"]
 
-    for node, atom_type in atom1.items():
-        groups1[atom_type].append(node)
-
-    for node, atom_type in atom2.items():
-        groups2[atom_type].append(node)
-
-    compatible_nodes = []
-
-    common_atom_types = groups1.keys() & groups2.keys()
-
-    for atom_type in common_atom_types:
-
-        for node1 in groups1[atom_type]:
-
-            for node2 in groups2[atom_type]:
-                compatible_nodes.append((node1, node2))
-
-    total_edge_weight = (
-        sum(
-            data["weight"]
-            for _, _, data in G1.edges(data=True)
+        incident_bonds.append(
+            (neighbour_atom, bond_weight)
         )
-        +
-        sum(
-            data["weight"]
-            for _, _, data in G2.edges(data=True)
+
+    return Counter(incident_bonds)
+
+def incident_signature_cost(signature1, signature2):
+    """
+    Calculate the relaxed cost between two incident-bond
+    signatures.
+
+    Each unmatched incident bond contributes half its weight
+    because every molecular bond is observed from both of its
+    endpoint atoms.
+    """
+
+    cost = 0.0
+
+    all_codes = signature1.keys() | signature2.keys()
+
+    for code in all_codes:
+        bond_weight = code[1]
+
+        difference = abs(
+            signature1[code] - signature2[code]
         )
+
+        cost += difference * bond_weight / 2.0
+
+    return cost
+
+def unmatched_node_cost(signature):
+    """
+    Cost of leaving one atom unmatched.
+
+    All bonds incident to the atom are considered unmatched.
+    Each contributes half its weight.
+    """
+
+    return sum(
+        count * code[1] / 2.0
+        for code, count in signature.items()
     )
 
-    if not compatible_nodes:
-        return total_edge_weight / 2.0
+def filter_rascal_second_tier(G1, G2):
+    """
+    RASCAL-inspired second-tier lower bound.
 
-    def compatible(pair1, pair2):
+    Atoms are separated by atom type. For each atom type,
+    a minimum-cost bipartite assignment is solved.
 
-        node1_g1, node1_g2 = pair1
-        node2_g1, node2_g2 = pair2
+    Matching costs are based on the complete multiset of
+    neighboring atom types and bond weights.
 
-        if node1_g1 == node2_g1:
-            return False
+    Dummy nodes represent atoms that cannot be matched because
+    one molecule has more atoms of a given type.
+    """
 
-        if node1_g2 == node2_g2:
-            return False
+    atom_types1 = { data["atom"]
+        for _, data in G1.nodes(data=True)}
 
-        edge1_exists = G1.has_edge(node1_g1, node2_g1)
-        edge2_exists = G2.has_edge(node1_g2, node2_g2)
+    atom_types2 = {data["atom"]
+      for _, data in G2.nodes(data=True)
+    }
 
-        if edge1_exists != edge2_exists:
-            return False
+    atom_types = atom_types1 | atom_types2
 
-        if edge1_exists:
+    signatures1 = {
+        node: incident_signature(G1, node)
+        for node in G1.nodes()
+    }
 
-            weight1 = G1[node1_g1][node2_g1]["weight"]
-            weight2 = G2[node1_g2][node2_g2]["weight"]
+    signatures2 = {
+        node: incident_signature(G2, node)
+        for node in G2.nodes()
+    }
 
-            return abs(weight1 - weight2) <= tol
+    total_bound = 0.0
 
-        return True
+    for atom_type in atom_types:
 
-    def node_score(pair):
-
-        node1, node2 = pair
-
-        weighted_degree1 = sum(
-            G1[node1][neighbour]["weight"]
-            for neighbour in G1.neighbors(node1)
-        )
-
-        weighted_degree2 = sum(
-            G2[node2][neighbour]["weight"]
-            for neighbour in G2.neighbors(node2)
-        )
-
-        degree_similarity = -abs(
-            weighted_degree1 - weighted_degree2
-        )
-
-        shared_degree = min(
-            G1.degree(node1),
-            G2.degree(node2)
-        )
-
-        return shared_degree, degree_similarity
-
-    starts = sorted(
-        compatible_nodes,
-        key=node_score,
-        reverse=True
-    )[:max_starts]
-
-    best_clique = []
-
-    for start in starts:
-
-        clique = [start]
-
-        used_g1 = {start[0]}
-        used_g2 = {start[1]}
-
-        candidates = [
-            pair
-            for pair in compatible_nodes
-            if pair != start
-            and pair[0] not in used_g1
-            and pair[1] not in used_g2
+        nodes1 = [
+            node
+            for node in G1.nodes()
+            if G1.nodes[node]["atom"] == atom_type
         ]
 
-        while candidates:
+        nodes2 = [
+            node
+            for node in G2.nodes()
+            if G2.nodes[node]["atom"] == atom_type
+        ]
 
-            valid_candidates = [
-                pair
-                for pair in candidates
-                if all(
-                    compatible(pair, clique_pair)
-                    for clique_pair in clique
+        # Nothing to process for this atom type.
+        if not nodes1 and not nodes2:
+            continue
+
+        assignment_graph = nx.Graph()
+
+        left_nodes = [
+            ("g1", atom_type, node)
+            for node in nodes1
+        ]
+
+        right_nodes = [
+            ("g2", atom_type, node)
+            for node in nodes2
+        ]
+
+        assignment_graph.add_nodes_from(
+            left_nodes,
+            bipartite=0
+        )
+
+        assignment_graph.add_nodes_from(
+            right_nodes,
+            bipartite=1
+        )
+
+        # ----------------------------------------------------
+        # Add real atom-to-atom mapping possibilities.
+        # ----------------------------------------------------
+
+        for node1 in nodes1:
+            left_node = ("g1", atom_type, node1)
+
+            for node2 in nodes2:
+                right_node = ("g2", atom_type, node2)
+                cost = incident_signature_cost( signatures1[node1],signatures2[node2])
+                assignment_graph.add_edge(
+                    left_node,
+                    right_node,
+                    weight=cost
                 )
-            ]
 
-            if not valid_candidates:
-                break
+        # ----------------------------------------------------
+        # Add dummy atoms when G1 has fewer atoms.
+        # ----------------------------------------------------
 
-            next_node = max(
-                valid_candidates,
-                key=node_score
+        if len(nodes1) < len(nodes2):
+            number_of_dummies = len(nodes2) - len(nodes1)
+            for dummy_id in range(number_of_dummies):
+                dummy = ( "g1_dummy",  atom_type,  dummy_id)
+                assignment_graph.add_node( dummy, bipartite=0)
+
+                for node2 in nodes2:
+                    right_node = (  "g2", atom_type,  node2)
+                    deletion_cost = unmatched_node_cost(signatures2[node2])
+
+                    assignment_graph.add_edge(  dummy, right_node, weight=deletion_cost)
+
+        # ----------------------------------------------------
+        # Add dummy atoms when G2 has fewer atoms.
+        # ----------------------------------------------------
+
+        elif len(nodes2) < len(nodes1):
+
+            number_of_dummies = len(nodes1) - len(nodes2)
+            for dummy_id in range(number_of_dummies):
+                dummy = ( "g2_dummy", atom_type, dummy_id)
+                assignment_graph.add_node(  dummy, bipartite=1)
+                for node1 in nodes1:
+                    left_node = ( "g1",  atom_type, node1)
+                    deletion_cost = unmatched_node_cost( signatures1[node1])
+                    assignment_graph.add_edge(left_node,  dummy, weight=deletion_cost)
+
+        left_partition = {
+            node
+            for node, data
+            in assignment_graph.nodes(data=True)
+            if data.get("bipartite") == 0
+        }
+
+        right_partition = {
+            node
+            for node, data
+            in assignment_graph.nodes(data=True)
+            if data.get("bipartite") == 1
+        }
+
+        if not left_partition or not right_partition:
+            continue
+
+        matching = (
+            nx.algorithms.bipartite.minimum_weight_full_matching(
+                assignment_graph,
+                top_nodes=left_partition,
+                weight="weight"
             )
+        )
 
-            clique.append(next_node)
+        # The returned dictionary contains every match twice:
+        #
+        # left -> right
+        # right -> left
+        #
+        # Therefore, only entries belonging to the left
+        # partition are counted.
+        for left_node in left_partition:
 
-            used_g1.add(next_node[0])
-            used_g2.add(next_node[1])
+            matched_node = matching.get(left_node)
 
-            candidates = [
-                pair
-                for pair in valid_candidates
-                if pair != next_node
-                and pair[0] not in used_g1
-                and pair[1] not in used_g2
-            ]
+            if matched_node is None:
+                continue
 
-        if len(clique) > len(best_clique):
-            best_clique = clique
+            total_bound += assignment_graph[ left_node  ][ matched_node]["weight"]
 
-    common_edge_weight = 0.0
+    # we don't  divide by two again here
+    # incident_signature_cost() already assigns half of each
+    # bond mismatch to each endpoint.
+    return total_bound
 
-    for first_index in range(len(best_clique)):
 
-        node1_g1, _ = best_clique[first_index]
 
-        for second_index in range(
-            first_index + 1,
-            len(best_clique)
-        ):
-
-            node2_g1, _ = best_clique[second_index]
-
-            if G1.has_edge(node1_g1, node2_g1):
-
-                common_edge_weight += (
-                    G1[node1_g1][node2_g1]["weight"]
-                )
-
-    heuristic_distance = (
-        total_edge_weight / 2.0
-        - common_edge_weight
-    )
-
-    return max(0.0, heuristic_distance)
 
 
 # ============================================================
@@ -969,9 +593,7 @@ def filter2(G1, G2):
     # Create a copy instead of assigning atom_types = atom_types1,
     # which would modify atom_types1 when new elements are appended.
     atom_types = list(atom_types1)
-
     for atom_type in atom_types2:
-
         if atom_type not in atom_types:
             atom_types.append(atom_type)
 
@@ -996,100 +618,49 @@ def filter2(G1, G2):
 
         matching_graph = nx.Graph()
 
-        left_nodes = [
-            ("g1", atom_type, node)
-            for node in nodes1
-        ]
+        left_nodes = [  ("g1", atom_type, node)
+            for node in nodes1 ]
 
-        right_nodes = [
-            ("g2", atom_type, node)
+        right_nodes = [  ("g2", atom_type, node)
             for node in nodes2
         ]
 
-        matching_graph.add_nodes_from(
-            left_nodes,
-            bipartite=0
-        )
-
-        matching_graph.add_nodes_from(
-            right_nodes,
-            bipartite=1
-        )
+        matching_graph.add_nodes_from( left_nodes,  bipartite=0)
+        matching_graph.add_nodes_from( right_nodes, bipartite=1)
 
         for node1 in nodes1:
 
-            left_node = (
-                "g1",
-                atom_type,
-                node1
-            )
+            left_node = ( "g1", atom_type,node1)
 
             for node2 in nodes2:
 
-                right_node = (
-                    "g2",
-                    atom_type,
-                    node2
-                )
+                right_node = ( "g2", atom_type,node2)
 
                 matching_graph.add_edge(
                     left_node,
                     right_node,
-                    weight=get_cost(
-                        G1,
-                        G2,
-                        node1,
-                        node2
-                    )
+                    weight=get_cost( G1,  G2, node1,node2 )
                 )
 
         if len(nodes1) < len(nodes2):
 
             number_of_dummies = len(nodes2) - len(nodes1)
-
             for dummy_id in range(number_of_dummies):
-
-                dummy = (
-                    "g1_dummy",
-                    atom_type,
-                    dummy_id
-                )
-
-                matching_graph.add_node(
-                    dummy,
-                    bipartite=0
-                )
-
+                dummy = ( "g1_dummy", atom_type, dummy_id)
+                matching_graph.add_node(  dummy,    bipartite=0)
                 for node2 in nodes2:
+                    right_node = ("g2",  atom_type, node2)
 
-                    right_node = (
-                        "g2",
-                        atom_type,
-                        node2
-                    )
+                    deletion_cost = sum( G2[neighbour][node2]["weight"]
+                        for neighbour in G2.neighbors(node2)) / 2.0
 
-                    deletion_cost = sum(
-                        G2[neighbour][node2]["weight"]
-                        for neighbour in G2.neighbors(node2)
-                    ) / 2.0
-
-                    matching_graph.add_edge(
-                        dummy,
-                        right_node,
-                        weight=deletion_cost
-                    )
+                    matching_graph.add_edge( dummy, right_node,  weight=deletion_cost)
 
         elif len(nodes2) < len(nodes1):
 
             number_of_dummies = len(nodes1) - len(nodes2)
-
             for dummy_id in range(number_of_dummies):
-
-                dummy = (
-                    "g2_dummy",
-                    atom_type,
-                    dummy_id
-                )
+                dummy = (  "g2_dummy", atom_type, dummy_id)
 
                 matching_graph.add_node(
                     dummy,
@@ -1155,6 +726,244 @@ def filter2(G1, G2):
 
     return result
 
+def filter3_improved_bond_inventory(G1, G2):
+
+    # -----------------------------------------
+    # Existing bond inventory bound
+    # -----------------------------------------
+
+    d_bond = filter3_bond_inventory(
+        G1,
+        G2
+    )
+
+    # -----------------------------------------
+    # Weighted-degree distribution bound
+    # -----------------------------------------
+
+    def degree_inventory(G):
+
+        inventory = Counter()
+
+        for node in G.nodes():
+
+            atom = G.nodes[node]["atom"]
+
+            weighted_degree = sum(
+                G[node][neighbour]["weight"]
+                for neighbour in G.neighbors(node)
+            )
+
+            inventory[
+                (
+                    atom,
+                    weighted_degree
+                )
+            ] += 1
+
+        return inventory
+
+    inv1 = degree_inventory(G1)
+    inv2 = degree_inventory(G2)
+
+    degree_difference = 0.0
+
+    all_signatures = (
+        inv1.keys()
+        |
+        inv2.keys()
+    )
+
+    for signature in all_signatures:
+
+        weighted_degree = signature[1]
+
+        count_difference = abs(
+            inv1[signature]
+            -
+            inv2[signature]
+        )
+
+        degree_difference += (
+            weighted_degree
+            *
+            count_difference
+        )
+
+    d_degree_inventory = (
+        degree_difference
+        / 4.0
+    )
+
+    # Both are candidate lower bounds.
+    # Take whichever is stronger.
+    return max(
+        d_bond,
+        d_degree_inventory
+    )
+
+def filter4_two_hop_assignment(G1, G2):
+
+    def signature(G, node):
+
+        result = []
+
+        for neighbour in G.neighbors(node):
+
+            neighbour_atom = (
+                G.nodes[neighbour]["atom"]
+            )
+
+            bond_weight = (
+                G[node][neighbour]["weight"]
+            )
+
+            second_level = []
+
+            for second in G.neighbors(neighbour):
+
+                if second == node:
+                    continue
+
+                second_level.append(
+                    (
+                        G.nodes[second]["atom"],
+                        G[neighbour][second]["weight"]
+                    )
+                )
+
+            result.append(
+                (
+                    neighbour_atom,
+                    bond_weight,
+                    tuple(sorted(second_level))
+                )
+            )
+
+        return tuple(sorted(result))
+
+
+    sig1 = {
+        node: signature(G1, node)
+        for node in G1.nodes()
+    }
+
+    sig2 = {
+        node: signature(G2, node)
+        for node in G2.nodes()
+    }
+
+
+    def signature_cost(s1, s2):
+
+        c1 = Counter(s1)
+        c2 = Counter(s2)
+
+        difference = 0.0
+
+        for item in c1.keys() | c2.keys():
+
+            weight = item[1]
+
+            difference += (
+                abs(
+                    c1[item]
+                    -
+                    c2[item]
+                )
+                *
+                weight
+            )
+
+        return difference / 4.0
+
+
+    atom_types = {
+        G1.nodes[n]["atom"]
+        for n in G1.nodes()
+    } | {
+        G2.nodes[n]["atom"]
+        for n in G2.nodes()
+    }
+
+
+    total = 0.0
+
+
+    for atom_type in atom_types:
+
+        nodes1 = [
+            n for n in G1.nodes()
+            if G1.nodes[n]["atom"] == atom_type
+        ]
+
+        nodes2 = [
+            n for n in G2.nodes()
+            if G2.nodes[n]["atom"] == atom_type
+        ]
+
+
+        if not nodes1 or not nodes2:
+            continue
+
+
+        B = nx.Graph()
+
+
+        left = [
+            ("g1", n)
+            for n in nodes1
+        ]
+
+        right = [
+            ("g2", n)
+            for n in nodes2
+        ]
+
+
+        B.add_nodes_from(
+            left,
+            bipartite=0
+        )
+
+        B.add_nodes_from(
+            right,
+            bipartite=1
+        )
+
+
+        for n1 in nodes1:
+
+            for n2 in nodes2:
+
+                cost = signature_cost(
+                    sig1[n1],
+                    sig2[n2]
+                )
+
+                B.add_edge(
+                    ("g1", n1),
+                    ("g2", n2),
+                    weight=cost
+                )
+
+
+        matching = (
+            nx.algorithms.matching
+            .min_weight_matching(
+                B,
+                weight="weight"
+            )
+        )
+
+
+        for a, b in matching:
+
+            total += B[a][b]["weight"]
+
+
+    return total
+
 
 # ============================================================
 # Filter cascade
@@ -1167,72 +976,93 @@ def apply_filter(
     always_stronger_bound=True
 ):
 
-    # --------------------------------------------------------
-    # 1. Original weighted-degree bound
-    # --------------------------------------------------------
-
+    # 1. Cheap weighted-degree bound
     d1 = filter1(G1, G2)
-    d = d1
 
-    if d > threshold:
-        return d, 2
+    if d1 > threshold:
+        return (
+            d1,
+            None,
+            None,
+            None,
+            0.0,
+            d1,
+            2
+        )
 
-    # --------------------------------------------------------
-    # 2. Bond inventory
-    # --------------------------------------------------------
+    # 2. Cheap bond inventory
+    #d_bond = filter3_bond_inventory(
+    #    G1,
+    #    G2
+    #)
 
-    d_bond = filter3_bond_inventory(G1, G2)
-    d = max(d, d_bond)
+    current_bound = max(
+        d1,
+        0
+    )
 
-    if d > threshold:
-        return d, 2
+    if current_bound > threshold:
+        return (
+            d1,
+            0,
+            None,
+            None,
+            0.0,
+            current_bound,
+            2
+        )
 
-    # --------------------------------------------------------
-    # 3. NEW: directed incident inventory
-    # --------------------------------------------------------
-
-    d_incident = filter4_incident_inventory(
+    # 3. More expensive neighborhood assignment
+    d2 = filter2(
         G1,
         G2
     )
 
-    d = max(
-        d,
-        d_incident
-    )
-
-    if d > threshold:
-        return d, 2
-
-    # --------------------------------------------------------
-    # 4. Original neighborhood assignment
-    # --------------------------------------------------------
-
-    d2 = filter2(G1, G2)
-
-    d = max(
-        d,
+    current_bound = max(
+        current_bound,
         d2
     )
 
-    if d > threshold:
-        return d, 2
+    if current_bound > threshold:
+        return (
+            d1,
+            0,
+            None,
+            d2,
+            0.0,
+            current_bound,
+            2
+        )
 
-    # --------------------------------------------------------
-    # 5. RASCAL-inspired assignment
-    # --------------------------------------------------------
-
-    d_rascal = filter_rascal_second_tier(
+    # 4. Most expensive structural filter
+    d_path = filter4_two_hop_assignment(
         G1,
         G2
     )
 
-    d = max(
-        d,
-        d_rascal
+    current_bound = max(
+        current_bound,
+        d_path
     )
 
-    if d > threshold:
-        return d, 2
+    if current_bound > threshold:
+        return (
+            d1,
+            0,
+            d_path,
+            d2,
+            0.0,
+            current_bound,
+            2
+        )
 
-    return d, 1
+
+    return (
+        d1,
+        0,
+        d_path,
+        d2,
+        0,
+        current_bound,
+        1
+    )

@@ -29,7 +29,7 @@ mass_ranges = [
    #(200, 300),
     #(300, 500),
     (500, 800),
-    # (800, 1000),
+     #(800, 1000),
 ]
 
 # =========================
@@ -70,6 +70,11 @@ def parse_mces_result(result):
     is_exact = 0
     is_lower_bound = 0
     actual_threshold = None
+    d1= None
+    d_bond= None
+    d_incident= None
+    d2= None
+    d_rascal= None
 
     if result is None:
         return (
@@ -81,7 +86,12 @@ def parse_mces_result(result):
             result_type,
             is_exact,
             is_lower_bound,
-            actual_threshold
+            actual_threshold,
+            d1,
+            d_bond,
+            d_incident,
+            d2,
+            d_rascal
         )
 
     if len(result) > 1:
@@ -98,6 +108,21 @@ def parse_mces_result(result):
 
     if len(result) > 5:
         actual_threshold = result[5]
+
+    if len(result) > 6:
+        d1 = result[6]
+
+    if len(result) > 7:
+        d_bond = result[7]
+
+    if len(result) > 8:
+        d_incident = result[8]
+
+    if len(result) > 9:
+        d2 = result[9]
+
+    if len(result) > 10:
+        d_rascal = result[10]
 
 
 
@@ -121,6 +146,11 @@ def parse_mces_result(result):
         is_exact,
         is_lower_bound,
         actual_threshold,
+        d1,
+        d_bond,
+        d_incident,
+        d2,
+        d_rascal
     )
 
 
@@ -176,6 +206,11 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             is_exact = 0
             is_lower_bound = 0
             actual_threshold = None
+            d1 = None
+            d_bond = None
+            d_incident = None
+            d2 = None
+            d_rascal = None
 
             start = time.time()
             process.start()
@@ -211,6 +246,11 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                             is_exact,
                             is_lower_bound,
                             actual_threshold,
+                            d1,
+                            d_bond,
+                            d_incident,
+                            d2,
+                            d_rascal
                         ) = parse_mces_result(raw_result)
 
                     else:
@@ -241,6 +281,11 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
                 result_type,
                 is_exact,
                 is_lower_bound,
+                d1,
+                d_bond,
+                d_incident,
+                d2,
+                d_rascal
             ])
 
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
@@ -266,6 +311,11 @@ def main(solver_name, threads, mass_min, mass_max, output_csv):
             "result_type",
             "is_exact",
             "is_lower_bound",
+            "d1",
+            "d_bond",
+            "d_incident",
+            "d2",
+            "d_rascal"
         ])
 
         writer.writerows(results)
@@ -288,7 +338,7 @@ if __name__ == "__main__":
                         BASE_DIR
                         / "example"
                         / "filter_mass_diff_and_size"
-                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_filters.csv"
+                        / f"filtered_pairs_{mass_min}_{mass_max}_{solver_name}_threads_{threads}_comparaison_with_filter.csv"
                 )
 
                 print(

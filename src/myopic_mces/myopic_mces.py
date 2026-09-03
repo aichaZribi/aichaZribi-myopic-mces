@@ -59,9 +59,29 @@ def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={
     if threshold != -1:         # with `-1` always compute exact distance
         # filter out if distance is above the threshold
         try:
-            distance, compute_mode = apply_filter(G1, G2, threshold, always_stronger_bound=always_stronger_bound)
+            (
+                d1,
+                d_bond,
+                d_incident,
+                d2,
+                d_rascal,
+                distance,
+                compute_mode
+            ) = apply_filter(G1, G2, threshold, always_stronger_bound=always_stronger_bound)
             if distance > threshold:
-                return i, distance, time.time() - start, compute_mode
+                return (
+                    i,
+                    distance,
+                    time.time() - start,
+                    compute_mode,
+                    0,  # ILP solver not called
+                    threshold,
+                    d1,
+                    d_bond,
+                    d_incident,
+                    d2,
+                    d_rascal
+                )
         except Exception as e:
             print('ERROR:', smiles1, smiles2, 'filter', e, file=sys.stderr)
             if (catch_errors):
@@ -81,7 +101,19 @@ def MCES(smiles1, smiles2, threshold=10, i=0, solver='default', solver_options={
             compute_mode = 1
         else:
             raise e
-    return i, distance, time.time() - start, compute_mode, ilp_solver, actual_threshold
+    return (
+    i,
+    distance,
+    time.time() - start,
+    compute_mode,
+    ilp_solver,
+    actual_threshold,
+    d1,
+    d_bond,
+    d_incident,
+    d2,
+    d_rascal
+)
 
 def hdf5_input(file_path):
     import h5py
